@@ -1,5 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
+export type UserRole = 'OWNER' | 'ADMIN' | 'USER';
+
 @Entity()
 export class User {
   @PrimaryGeneratedColumn()
@@ -13,4 +15,7 @@ export class User {
 
   @Column({ name: 'password_hash' })
   passwordHash: string;
+
+  @Column({ type: 'varchar', default: 'USER' })
+  role: UserRole;
 }

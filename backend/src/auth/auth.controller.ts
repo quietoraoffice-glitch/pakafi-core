@@ -1,5 +1,5 @@
-import { AuthService } from './auth.service';
 import { Controller, Post, Body, Get } from '@nestjs/common';
+import { AuthService } from './auth.service';
 
 class RegisterDto {
   email: string;
@@ -10,6 +10,11 @@ class RegisterDto {
 class LoginDto {
   email: string;
   password: string;
+}
+
+class BootstrapOwnerDto {
+  email: string;
+  secret: string;
 }
 
 @Controller('auth')
@@ -34,5 +39,12 @@ export class AuthController {
   async login(@Body() body: LoginDto) {
     const { email, password } = body;
     return this.authService.login(email, password);
+  }
+
+  // 🧿 Route spéciale de couronnement OWNER (à utiliser une seule fois)
+  @Post('bootstrap-owner')
+  async bootstrapOwner(@Body() body: BootstrapOwnerDto) {
+    const { email, secret } = body;
+    return this.authService.bootstrapOwner(email, secret);
   }
 }

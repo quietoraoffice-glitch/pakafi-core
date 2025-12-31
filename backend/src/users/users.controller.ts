@@ -1,29 +1,15 @@
 import {
   Controller,
   Get,
-  Post,
-  Body,
   Param,
   ParseIntPipe,
   NotFoundException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 
-class CreateUserDto {
-  email: string;
-  name?: string;
-}
-
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
-
-  // juste changer les signatures
-
-  @Post()
-  async create(@Body() body: CreateUserDto) {
-    return this.usersService.create(body.email, body.name);
-  }
 
   @Get()
   async findAll() {
@@ -38,5 +24,4 @@ export class UsersController {
     }
     return user;
   }
-
 }

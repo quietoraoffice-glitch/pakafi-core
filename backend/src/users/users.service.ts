@@ -10,7 +10,11 @@ export class UsersService {
     private readonly usersRepo: Repository<User>,
   ) {}
 
-  async createWithPassword(email: string, passwordHash: string, name?: string): Promise<User> {
+  async createWithPassword(
+    email: string,
+    passwordHash: string,
+    name?: string,
+  ): Promise<User> {
     const user = this.usersRepo.create({ email, name, passwordHash });
     return this.usersRepo.save(user);
   }

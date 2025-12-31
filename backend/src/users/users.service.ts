@@ -10,8 +10,8 @@ export class UsersService {
     private readonly usersRepo: Repository<User>,
   ) {}
 
-  async create(email: string, name?: string): Promise<User> {
-    const user = this.usersRepo.create({ email, name });
+  async createWithPassword(email: string, passwordHash: string, name?: string): Promise<User> {
+    const user = this.usersRepo.create({ email, name, passwordHash });
     return this.usersRepo.save(user);
   }
 
@@ -21,5 +21,9 @@ export class UsersService {
 
   async findOne(id: number): Promise<User | null> {
     return this.usersRepo.findOne({ where: { id } });
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    return this.usersRepo.findOne({ where: { email } });
   }
 }

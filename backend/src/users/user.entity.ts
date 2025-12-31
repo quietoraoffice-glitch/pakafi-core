@@ -10,4 +10,7 @@ export class User {
 
   @Column({ nullable: true })
   name?: string;
+
+  @Column({ name: 'password_hash' })
+  passwordHash: string;
 }

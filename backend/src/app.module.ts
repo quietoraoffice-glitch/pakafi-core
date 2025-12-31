@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
 import { User } from './users/user.entity';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -11,12 +12,14 @@ import { User } from './users/user.entity';
       type: 'postgres',
       url: process.env.DATABASE_URL,
       entities: [User],
-      synchronize: true, // à garder seulement en dev
+      synchronize: true,
       autoLoadEntities: true,
     }),
     UsersModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
+

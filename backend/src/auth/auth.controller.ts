@@ -1,5 +1,6 @@
 import { Controller, Post, Body } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { Controller, Post, Body, Get } from '@nestjs/common';
 
 class RegisterDto {
   email: string;
@@ -15,6 +16,14 @@ class LoginDto {
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Get('debug')
+  debug() {
+    return {
+      ok: true,
+      route: 'auth/debug',
+    };
+  }
 
   @Post('register')
   async register(@Body() body: RegisterDto) {

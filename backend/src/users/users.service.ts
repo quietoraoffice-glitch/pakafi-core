@@ -39,4 +39,21 @@ export class UsersService {
   async save(user: User): Promise<User> {
     return this.usersRepo.save(user);
   }
+
+  async updateRole(id: number, role: UserRole): Promise<User> {
+    const user = await this.findOne(id);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    user.role = role;
+    return this.usersRepo.save(user);
+  }
+
+  async remove(id: number): Promise<void> {
+    await this.usersRepo.delete(id);
+  }
+
+  async countAll(): Promise<number> {
+    return this.usersRepo.count();
+  }
 }

@@ -1,7 +1,12 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
+  ParseIntPipe,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -32,6 +37,10 @@ class ForceSetPasswordDto {
   email: string;
   newPassword: string;
   secret: string;
+}
+
+class UpdateUserRoleDto {
+  role: 'OWNER' | 'ADMIN' | 'USER';
 }
 
 @Controller('auth')
@@ -88,5 +97,94 @@ export class AuthController {
   @Roles('OWNER')
   async listUsers() {
     return this.usersService.findAll();
+  }
+
+  // 3️⃣ Panel OWNER : changer le rôle d'un user
+  @Patch('owner/users/:id/role')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  async updateUserRole(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateUserRoleDto,
+    @Req() req: any,
+  ) {
+    const { role } = body;
+
+    // empêcher de faire des choses bizarres : OWNER ne peut pas s'enlever lui-même
+    const requester = req.user;
+    if (requester && requester.sub === id && role !== 'OWNER') {
+      throw new BadRequestException(
+        'Tu ne peux pas retirer ton propre rôle OWNER via cette route.',
+      );
+    }
+
+    const user = await this.usersService.findOne(id);
+    if (!user) {
+      throw new BadRequestException('Utilisateur introuvable');
+    }
+
+    if (user.role === 'OWNER' && role !== 'OWNER') {
+      throw new BadRequestException(
+        'Impossible de rétrograder un OWNER via cette route.',
+      );
+    }
+
+    const updated = await this.usersService.updateRole(id, role as any);
+    return {
+      message: 'Rôle mis à jour',
+      user: updated,
+    };
+  }
+
+  // 4️⃣ Panel OWNER : supprimer un user (sauf OWNER)
+  @Delete('owner/users/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  async deleteUser(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const requester = req.user;
+
+    if (requester && requester.sub === id) {
+      throw new BadRequestException('Tu ne peux pas te supprimer toi-même.');
+    }
+
+    const user = await this.usersService.findOne(id);
+    if (!user) {
+      throw new BadRequestException('Utilisateur introuvable');
+    }
+
+    if (user.role === 'OWNER') {
+      throw new BadRequestException('Impossible de supprimer un OWNER.');
+    }
+
+    await this.usersService.remove(id);
+    return { message: 'Utilisateur supprimé avec succès' };
+  }
+
+  // 5️⃣ Panel OWNER : infos système simples
+  @Get('owner/system-info')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  async systemInfo() {
+    let dbStatus = 'unknown';
+    let userCount = 0;
+
+    try {
+      userCount = await this.usersService.countAll();
+      dbStatus = 'ok';
+    } catch (e) {
+      dbStatus = 'error';
+    }
+
+    return {
+      app: 'Pakafi Core',
+      system: 'Quietora',
+      version: '0.1.0',
+      environment: process.env.NODE_ENV || 'production',
+      database: {
+        status: dbStatus,
+        users: userCount,
+      },
+      timestamp: new Date().toISOString(),
+    };
   }
 }

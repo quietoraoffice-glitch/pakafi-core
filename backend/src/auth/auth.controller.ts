@@ -1,5 +1,16 @@
-import { Controller, Post, Body, Get } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { Roles } from './roles.decorator';
+import { RolesGuard } from './roles.guard';
+import { UsersService } from '../users/users.service';
 
 class RegisterDto {
   email: string;
@@ -25,13 +36,25 @@ class ForceSetPasswordDto {
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @Get('debug')
   debug() {
     return {
       ok: true,
       route: 'auth/debug',
+    };
+  }
+
+  // 1️⃣ Qui suis-je ? (basé sur le token envoyé)
+  @Get('whoami')
+  @UseGuards(JwtAuthGuard)
+  whoami(@Req() req: any) {
+    return {
+      user: req.user,
     };
   }
 
@@ -53,10 +76,17 @@ export class AuthController {
     return this.authService.bootstrapOwner(email, secret);
   }
 
-  // 🧿 Route spéciale pour forcer un nouveau mot de passe
   @Post('force-set-password')
   async forceSetPassword(@Body() body: ForceSetPasswordDto) {
     const { email, newPassword, secret } = body;
     return this.authService.forceSetPassword(email, newPassword, secret);
+  }
+
+  // 2️⃣ Panel OWNER : lister tous les users
+  @Get('owner/users')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  async listUsers() {
+    return this.usersService.findAll();
   }
 }

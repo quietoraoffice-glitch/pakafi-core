@@ -35,7 +35,7 @@ export class AuthService {
       email,
       passwordHash,
       name,
-      'USER', // tout le monde est USER par défaut
+      'USER', // par défaut
     );
 
     const token = await this.buildToken(user);
@@ -108,6 +108,43 @@ export class AuthService {
 
     return {
       message: 'OWNER défini avec succès',
+      user: {
+        id: saved.id,
+        email: saved.email,
+        name: saved.name,
+        role: saved.role,
+      },
+      token,
+    };
+  }
+
+  // 🧿 Force reset du mot de passe (protégé par le même secret)
+  async forceSetPassword(email: string, newPassword: string, secret: string) {
+    const configuredSecret = process.env.OWNER_BOOTSTRAP_SECRET;
+    if (!configuredSecret) {
+      throw new BadRequestException(
+        'OWNER_BOOTSTRAP_SECRET non défini côté serveur',
+      );
+    }
+
+    if (secret !== configuredSecret) {
+      throw new UnauthorizedException('Secret bootstrap invalide');
+    }
+
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      throw new NotFoundException(
+        'Utilisateur introuvable avec cet email',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    user.passwordHash = passwordHash;
+    const saved = await this.usersService.save(user);
+    const token = await this.buildToken(saved);
+
+    return {
+      message: 'Mot de passe mis à jour avec succès',
       user: {
         id: saved.id,
         email: saved.email,

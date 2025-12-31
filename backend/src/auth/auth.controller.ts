@@ -17,6 +17,12 @@ class BootstrapOwnerDto {
   secret: string;
 }
 
+class ForceSetPasswordDto {
+  email: string;
+  newPassword: string;
+  secret: string;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -41,10 +47,16 @@ export class AuthController {
     return this.authService.login(email, password);
   }
 
-  // 🧿 Route spéciale de couronnement OWNER (à utiliser une seule fois)
   @Post('bootstrap-owner')
   async bootstrapOwner(@Body() body: BootstrapOwnerDto) {
     const { email, secret } = body;
     return this.authService.bootstrapOwner(email, secret);
+  }
+
+  // 🧿 Route spéciale pour forcer un nouveau mot de passe
+  @Post('force-set-password')
+  async forceSetPassword(@Body() body: ForceSetPasswordDto) {
+    const { email, newPassword, secret } = body;
+    return this.authService.forceSetPassword(email, newPassword, secret);
   }
 }

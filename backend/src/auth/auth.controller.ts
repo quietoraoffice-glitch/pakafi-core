@@ -16,6 +16,8 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
 import { UsersService } from '../users/users.service';
+import { AppsService } from '../apps/apps.service';
+
 
 class RegisterDto {
   email: string;
@@ -48,7 +50,8 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
-  ) {}
+    private readonly appsService: AppsService,
+  ) { }
 
   @Get('debug')
   debug() {
@@ -97,6 +100,16 @@ export class AuthController {
   @Roles('OWNER')
   async listUsers() {
     return this.usersService.findAll();
+  }
+
+  @Get('owner/apps')
+  ownerApps() {
+    return this.appsService.ownerListApps();
+  }
+
+  @Get('owner/apps/:code/users')
+  ownerAppUsers(@Param('code') code: string) {
+    return this.appsService.ownerAppUsers(code);
   }
 
   // 3️⃣ Panel OWNER : changer le rôle d'un user

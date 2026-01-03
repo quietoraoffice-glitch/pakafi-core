@@ -1,4 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { OneToMany } from 'typeorm';
+import { UserApp } from '../apps/user-app.entity';
+
 
 export type UserRole = 'OWNER' | 'ADMIN' | 'USER';
 
@@ -18,4 +21,7 @@ export class User {
 
   @Column({ type: 'varchar', default: 'USER' })
   role: UserRole;
+
+  @OneToMany(() => UserApp, (ua) => ua.user)
+userApps: UserApp[];
 }

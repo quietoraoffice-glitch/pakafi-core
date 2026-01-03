@@ -23,5 +23,6 @@ import { AppsModule } from './apps/apps.module';
   ],
   controllers: [AppController],
   providers: [AppService],
+  exports: [AppService],
 })
 export class AppModule {}

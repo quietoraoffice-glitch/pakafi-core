@@ -8,11 +8,12 @@ import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 import { UsersModule } from '../users/users.module';
+import { AppsModule } from '../apps/apps.module';
 
 @Module({
   imports: [
-    // ✅ pour que AuthService puisse injecter UsersService
     forwardRef(() => UsersModule),
+    forwardRef(() => AppsModule),
 
     PassportModule.register({ defaultStrategy: 'jwt' }),
 

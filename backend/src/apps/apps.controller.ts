@@ -1,13 +1,13 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { AppsService } from './apps.service';
 import { HeartbeatDto } from './dto/heartbeat.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
-import { User } from '../auth/user.entity';
+import { User } from '../users/user.entity';
 
 @Controller('apps')
 export class AppsController {
-  constructor(private readonly appsService: AppsService) {}
+  constructor(private readonly appsService: AppsService) {} // ✅ OBLIGATOIRE
 
   @UseGuards(JwtAuthGuard)
   @Post('heartbeat')

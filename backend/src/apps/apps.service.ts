@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { AppEntity } from './app.entity';
 import { UserApp } from './user-app.entity';
 import { HeartbeatDto } from './dto/heartbeat.dto';
-import { User } from '../auth/user.entity';
+import { User } from '../users/user.entity';
 
 @Injectable()
 export class AppsService {

@@ -7,7 +7,7 @@ import {
   UpdateDateColumn,
   Index,
 } from 'typeorm';
-import { User } from '../auth/user.entity';
+import { User } from '../users/user.entity';
 import { AppEntity } from './app.entity';
 
 @Entity('user_apps')
@@ -16,7 +16,7 @@ export class UserApp {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => User, (u) => u.userApps, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (u: User) => u.userApps, { onDelete: 'CASCADE' })
   user: User;
 
   @ManyToOne(() => AppEntity, (a) => a.userApps, { onDelete: 'CASCADE' })

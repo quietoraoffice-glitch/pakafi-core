@@ -1,5 +1,4 @@
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
@@ -8,37 +7,22 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
-import { User } from '../users/user.entity';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
+    // ✅ pour que AuthService puisse injecter UsersService
+    forwardRef(() => UsersModule),
 
-    PassportModule.register({
-      defaultStrategy: 'jwt',
-    }),
+    PassportModule.register({ defaultStrategy: 'jwt' }),
 
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: {
-        expiresIn: '7d',
-      },
+      signOptions: { expiresIn: '7d' },
     }),
   ],
-
   controllers: [AuthController],
-
-  providers: [
-    AuthService,
-    JwtStrategy,
-    JwtAuthGuard,
-  ],
-
-  exports: [
-    AuthService,
-    JwtAuthGuard,
-    PassportModule,
-    JwtModule,
-  ],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard],
+  exports: [AuthService, JwtAuthGuard, PassportModule, JwtModule],
 })
 export class AuthModule {}

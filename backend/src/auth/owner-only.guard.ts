@@ -1,18 +1,27 @@
-import { CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+
+type ReqWithUser = {
+  user?: { role?: string };
+};
 
 @Injectable()
 export class OwnerOnlyGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const req = context.switchToHttp().getRequest<any>();
-    const user = req.user;
+    const req = context.switchToHttp().getRequest<ReqWithUser>();
 
-    if (!user) {
-      throw new ForbiddenException('Aucun utilisateur dans la requête');
+    // Si JwtAuthGuard/JwtStrategy n'a pas attaché req.user → on renvoie 401 proprement
+    if (!req.user) {
+      throw new UnauthorizedException('Missing user in request (JWT not applied)');
     }
 
-    // selon ton JWT, ça peut être user.role ou user?.role
-    if (user.role !== 'OWNER') {
-      throw new ForbiddenException('Accès réservé au OWNER');
+    if (req.user.role !== 'OWNER') {
+      throw new ForbiddenException('OWNER only');
     }
 
     return true;

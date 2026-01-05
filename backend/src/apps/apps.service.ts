@@ -11,7 +11,7 @@ export class AppsService {
   constructor(
     @InjectRepository(AppEntity) private readonly appsRepo: Repository<AppEntity>,
     @InjectRepository(UserApp) private readonly userAppsRepo: Repository<UserApp>,
-  ) {}
+  ) { }
 
   private normalizeCode(code: string) {
     return code.trim().toUpperCase();
@@ -142,26 +142,29 @@ export class AppsService {
     const app = await this.appsRepo.findOne({ where: { code } });
     if (!app) throw new BadRequestException('App inconnue');
 
-    const links = await this.userAppsRepo.find({
-      where: { app: { id: app.id } },
-      relations: ['user', 'app'],
-      order: { lastSeenAt: 'DESC' },
-      take: 200,
-    });
+    // INNER JOIN => jamais de user null
+    const rows = await this.userAppsRepo
+      .createQueryBuilder('ua')
+      .innerJoin('ua.user', 'u')
+      .innerJoin('ua.app', 'a')
+      .where('a.id = :appId', { appId: app.id })
+      .orderBy('ua.lastSeenAt', 'DESC')
+      .select([
+        'u.id AS "userId"',
+        'u.email AS "email"',
+        'u.name AS "name"',
+        'u.role AS "role"',
+        'ua.firstSeenAt AS "firstSeenAt"',
+        'ua.lastSeenAt AS "lastSeenAt"',
+        'ua.launchCount AS "launchCount"',
+      ])
+      .getRawMany();
 
     return {
       code: app.code,
       name: app.name,
-      userCount: links.length,
-      users: links.map((l) => ({
-        userId: l.user.id,
-        email: l.user.email,
-        name: l.user.name,
-        role: l.user.role,
-        firstSeenAt: l.firstSeenAt ?? null,
-        lastSeenAt: l.lastSeenAt ?? null,
-        launchCount: l.launchCount ?? 0,
-      })),
+      userCount: rows.length,
+      users: rows,
     };
   }
 }

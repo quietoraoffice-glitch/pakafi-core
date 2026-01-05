@@ -1,21 +1,20 @@
-import { Controller, Post, Body, UseGuards, Req, Get, Param } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
 import { Request } from 'express';
-import { AppsService } from './apps.service';
-import { HeartbeatDto } from './dto/heartbeat.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { OwnerOnlyGuard } from '../auth/owner-only.guard';
+import { HeartbeatDto } from './dto/heartbeat.dto';
+import { AppsService } from './apps.service';
 
 type JwtPayload = { sub: number; email: string; role: string };
 
 @Controller('apps')
 export class AppsController {
-  constructor(private readonly appsService: AppsService) { }
+  constructor(private readonly appsService: AppsService) {}
 
   @UseGuards(JwtAuthGuard)
   @Post('heartbeat')
-  async heartbeat(@Req() req: any, @Body() dto: HeartbeatDto) {
-    const userId = Number(req.user.sub); // 🔑 LA CLÉ
-    return this.appsService.heartbeat(userId, dto);
+  heartbeat(@Req() req: Request & { user?: JwtPayload }, @Body() dto: HeartbeatDto) {
+    const userId = req.user?.sub;
+    return this.appsService.heartbeat(userId!, dto);
   }
 
   // optionnel: endpoints owner via /apps aussi (tu as déjà /auth/owner/...)

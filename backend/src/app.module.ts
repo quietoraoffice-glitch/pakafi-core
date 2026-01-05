@@ -14,7 +14,7 @@ import { AppsModule } from './apps/apps.module';
       type: 'postgres',
       url: process.env.DATABASE_URL,
       entities: [User],
-      synchronize: true,
+      synchronize: false,
       autoLoadEntities: true,
     }),
     UsersModule,

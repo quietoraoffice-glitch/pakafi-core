@@ -67,25 +67,20 @@ export class AppsService {
     // 2) link user↔app
     // On force un lien avec userId réel via "user: {id: userId}" (TypeORM accepte)
     let link = await this.userAppsRepo.findOne({
-      where: {
-        user: { id: userId },
-        app: { id: app.id },
-      },
-      relations: { user: true, app: true },
+      where: { user: { id: userId }, app: { id: app.id } },
+      relations: ['user', 'app'],
     });
 
     if (!link) {
       link = this.userAppsRepo.create({
-        user: { id: userId } as any, // 👈 important
-        app,
+        user: { id: userId } as any,
+        app: { id: app.id } as any,
         launchCount: 1,
       });
     } else {
-      link.launchCount = (link.launchCount ?? 0) + 1;
+      link.launchCount += 1;
     }
-
     link = await this.userAppsRepo.save(link);
-
 
     return {
       ok: true,

@@ -16,10 +16,16 @@ export class UserApp {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => User, (u: User) => u.userApps, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (u: User) => u.userApps, {
+    onDelete: 'CASCADE',
+    nullable: false,
+  })
   user: User;
 
-  @ManyToOne(() => AppEntity, (a) => a.userApps, { onDelete: 'CASCADE' })
+  @ManyToOne(() => AppEntity, (a) => a.userApps, {
+    onDelete: 'CASCADE',
+    nullable: false,
+  })
   app: AppEntity;
 
   @CreateDateColumn()

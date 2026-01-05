@@ -4,7 +4,6 @@ import { Repository } from 'typeorm';
 import { AppEntity } from './app.entity';
 import { UserApp } from './user-app.entity';
 import { HeartbeatDto } from './dto/heartbeat.dto';
-import { User } from '../users/user.entity';
 
 @Injectable()
 export class AppsService {
@@ -17,41 +16,46 @@ export class AppsService {
     return code.trim().toUpperCase();
   }
 
-  async heartbeat(user: User, dto: HeartbeatDto) {
-    const now = new Date();
+  /**
+   * IMPORTANT:
+   * on passe userId (depuis JWT payload sub) au lieu d'attendre un User entity.
+   */
+  async heartbeat(userId: number, dto: HeartbeatDto) {
+    if (!userId || Number.isNaN(Number(userId))) {
+      throw new BadRequestException('Utilisateur manquant (auth requise)');
+    }
 
     const appCode = this.normalizeCode(dto.appCode);
+
     if (!/^[A-Z0-9_]+$/.test(appCode)) {
       throw new BadRequestException('appCode invalide (A-Z0-9_)');
     }
 
-    const appName = (dto.appName ?? '').trim();
-    if (!appName) throw new BadRequestException('appName est requis');
+    const now = new Date();
 
-    const appVersion = (dto.appVersion ?? '').trim();
-    const latestVersion = appVersion.length ? appVersion : null;
-
-    // 1) Upsert App (SANS lastSeenAt)
+    // 1) upsert app
     let app = await this.appsRepo.findOne({ where: { code: appCode } });
 
     if (!app) {
-      const createdApp: AppEntity = this.appsRepo.create({
+      app = this.appsRepo.create({
         code: appCode,
-        name: appName,
-        latestVersion,
+        name: dto.appName.trim(),
+        latestVersion: dto.appVersion?.trim() ?? null,
         status: 'ACTIVE',
-      } as Partial<AppEntity>);
-      app = await this.appsRepo.save(createdApp);
+      });
+      app = await this.appsRepo.save(app);
     } else {
       let changed = false;
 
-      if (appName !== app.name) {
-        app.name = appName;
+      const newName = dto.appName?.trim();
+      if (newName && newName !== app.name) {
+        app.name = newName;
         changed = true;
       }
 
-      if (latestVersion && latestVersion !== app.latestVersion) {
-        app.latestVersion = latestVersion;
+      const newVer = dto.appVersion?.trim();
+      if (newVer && newVer !== app.latestVersion) {
+        app.latestVersion = newVer;
         changed = true;
       }
 
@@ -60,30 +64,28 @@ export class AppsService {
       }
     }
 
-    // app est maintenant NON-NULL
-    // 2) Upsert link user↔app
+    // 2) link user↔app
+    // On force un lien avec userId réel via "user: {id: userId}" (TypeORM accepte)
     let link = await this.userAppsRepo.findOne({
-      where: { user: { id: user.id }, app: { id: app.id } },
-      relations: ['user', 'app'],
+      where: {
+        user: { id: userId },
+        app: { id: app.id },
+      },
+      relations: { user: true, app: true },
     });
 
     if (!link) {
-      const createdLink: UserApp = this.userAppsRepo.create({
-        user,
+      link = this.userAppsRepo.create({
+        user: { id: userId } as any, // 👈 important
         app,
         launchCount: 1,
-        firstSeenAt: now,
-        lastSeenAt: now,
-      } as Partial<UserApp>);
-
-      link = await this.userAppsRepo.save(createdLink);
+      });
     } else {
       link.launchCount = (link.launchCount ?? 0) + 1;
-      link.lastSeenAt = now;
-      if (!link.firstSeenAt) link.firstSeenAt = now;
-
-      link = await this.userAppsRepo.save(link);
     }
+
+    link = await this.userAppsRepo.save(link);
+
 
     return {
       ok: true,
@@ -107,17 +109,15 @@ export class AppsService {
 
     const rows = await Promise.all(
       apps.map(async (a) => {
+        // Ignore les lignes corrompues (userId NULL)
         const raw = await this.userAppsRepo
           .createQueryBuilder('ua')
           .select('COUNT(DISTINCT ua.userId)', 'userCount')
           .addSelect('MAX(ua.lastSeenAt)', 'lastSeenAt')
           .addSelect('SUM(ua.launchCount)', 'totalLaunches')
           .where('ua.appId = :appId', { appId: a.id })
-          .getRawOne<{
-            userCount: string | null;
-            lastSeenAt: string | null;
-            totalLaunches: string | null;
-          }>();
+          .andWhere('ua.userId IS NOT NULL')
+          .getRawOne();
 
         return {
           code: a.code,
@@ -137,34 +137,55 @@ export class AppsService {
 
   // OWNER: list users of an app
   async ownerAppUsers(appCode: string) {
-    const code = this.normalizeCode(appCode);
+    const code = appCode.trim().toUpperCase();
 
     const app = await this.appsRepo.findOne({ where: { code } });
-    if (!app) throw new BadRequestException('App inconnue');
+    if (!app) {
+      return {
+        code,
+        name: null,
+        userCount: 0,
+        users: [],
+      };
+    }
 
-    // INNER JOIN => jamais de user null
-    const rows = await this.userAppsRepo
+    const links = await this.userAppsRepo
       .createQueryBuilder('ua')
-      .innerJoin('ua.user', 'u')
-      .innerJoin('ua.app', 'a')
-      .where('a.id = :appId', { appId: app.id })
+      .innerJoinAndSelect('ua.user', 'user') // ✅ filtre user NULL
+      .innerJoin('ua.app', 'app')
+      .where('app.code = :code', { code })
       .orderBy('ua.lastSeenAt', 'DESC')
-      .select([
-        'u.id AS "userId"',
-        'u.email AS "email"',
-        'u.name AS "name"',
-        'u.role AS "role"',
-        'ua.firstSeenAt AS "firstSeenAt"',
-        'ua.lastSeenAt AS "lastSeenAt"',
-        'ua.launchCount AS "launchCount"',
-      ])
-      .getRawMany();
+      .limit(200)
+      .getMany();
+
+    const users = links.map((ua) => ({
+      userId: ua.user.id,
+      email: ua.user.email,
+      name: ua.user.name,
+      role: ua.user.role,
+      firstSeenAt: ua.firstSeenAt,
+      lastSeenAt: ua.lastSeenAt,
+      launchCount: ua.launchCount,
+    }));
 
     return {
       code: app.code,
       name: app.name,
-      userCount: rows.length,
-      users: rows,
+      userCount: users.length,
+      users,
     };
+  }
+
+
+  // OWNER: cleanup lignes corrompues (userId NULL)
+  async ownerCleanupNullUserApps() {
+    const res = await this.userAppsRepo
+      .createQueryBuilder()
+      .delete()
+      .from(UserApp)
+      .where('"userId" IS NULL')
+      .execute();
+
+    return { deleted: res.affected ?? 0 };
   }
 }

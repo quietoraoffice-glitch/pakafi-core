@@ -60,6 +60,7 @@ export class AuthController {
       route: 'auth/debug',
     };
   }
+  
 
   // 1️⃣ Qui suis-je ? (basé sur le token envoyé)
   @Get('whoami')

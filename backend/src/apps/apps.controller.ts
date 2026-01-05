@@ -1,30 +1,33 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Req, Get, Param } from '@nestjs/common';
+import { Request } from 'express';
 import { AppsService } from './apps.service';
 import { HeartbeatDto } from './dto/heartbeat.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OwnerOnlyGuard } from '../auth/owner-only.guard';
-import { CurrentUser } from '../auth/current-user.decorator';
-import { User } from '../users/user.entity';
+
+type JwtPayload = { sub: number; email: string; role: string };
 
 @Controller('apps')
 export class AppsController {
-  constructor(private readonly appsService: AppsService) {}
+  constructor(private readonly appsService: AppsService) { }
 
   @UseGuards(JwtAuthGuard)
   @Post('heartbeat')
-  heartbeat(@CurrentUser() user: User, @Body() dto: HeartbeatDto) {
-    return this.appsService.heartbeat(user, dto);
+  async heartbeat(@Req() req: any, @Body() dto: HeartbeatDto) {
+    const userId = Number(req.user.sub); // 🔑 LA CLÉ
+    return this.appsService.heartbeat(userId, dto);
   }
 
+  // optionnel: endpoints owner via /apps aussi (tu as déjà /auth/owner/...)
   @UseGuards(JwtAuthGuard, OwnerOnlyGuard)
   @Get('owner')
-  ownerListApps() {
+  async ownerApps() {
     return this.appsService.ownerListApps();
   }
 
   @UseGuards(JwtAuthGuard, OwnerOnlyGuard)
   @Get('owner/:appCode/users')
-  ownerAppUsers(@Param('appCode') appCode: string) {
+  async ownerAppUsers(@Param('appCode') appCode: string) {
     return this.appsService.ownerAppUsers(appCode);
   }
 }

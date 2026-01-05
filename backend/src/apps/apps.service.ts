@@ -9,8 +9,8 @@ import { User } from '../users/user.entity';
 @Injectable()
 export class AppsService {
   constructor(
-    @InjectRepository(AppEntity) private appsRepo: Repository<AppEntity>,
-    @InjectRepository(UserApp) private userAppsRepo: Repository<UserApp>,
+    @InjectRepository(AppEntity) private readonly appsRepo: Repository<AppEntity>,
+    @InjectRepository(UserApp) private readonly userAppsRepo: Repository<UserApp>,
   ) {}
 
   private normalizeCode(code: string) {
@@ -18,61 +18,86 @@ export class AppsService {
   }
 
   async heartbeat(user: User, dto: HeartbeatDto) {
-    const appCode = this.normalizeCode(dto.appCode);
+    const now = new Date();
 
+    const appCode = this.normalizeCode(dto.appCode);
     if (!/^[A-Z0-9_]+$/.test(appCode)) {
       throw new BadRequestException('appCode invalide (A-Z0-9_)');
     }
 
-    // 1) upsert app
+    const appName = (dto.appName ?? '').trim();
+    if (!appName) throw new BadRequestException('appName est requis');
+
+    const appVersion = (dto.appVersion ?? '').trim();
+    const latestVersion = appVersion.length ? appVersion : null;
+
+    // 1) Upsert App (SANS lastSeenAt)
     let app = await this.appsRepo.findOne({ where: { code: appCode } });
 
     if (!app) {
-      app = this.appsRepo.create({
+      const createdApp: AppEntity = this.appsRepo.create({
         code: appCode,
-        name: dto.appName.trim(),
-        latestVersion: dto.appVersion?.trim() ?? null,
+        name: appName,
+        latestVersion,
         status: 'ACTIVE',
-      });
-      app = await this.appsRepo.save(app);
+      } as Partial<AppEntity>);
+      app = await this.appsRepo.save(createdApp);
     } else {
-      // update name/version if provided
       let changed = false;
-      const newName = dto.appName.trim();
-      if (newName && newName !== app.name) {
-        app.name = newName;
+
+      if (appName !== app.name) {
+        app.name = appName;
         changed = true;
       }
-      const newVer = dto.appVersion?.trim();
-      if (newVer && newVer !== app.latestVersion) {
-        app.latestVersion = newVer;
+
+      if (latestVersion && latestVersion !== app.latestVersion) {
+        app.latestVersion = latestVersion;
         changed = true;
       }
-      if (changed) await this.appsRepo.save(app);
+
+      if (changed) {
+        app = await this.appsRepo.save(app);
+      }
     }
 
-    // 2) link user↔app
+    // app est maintenant NON-NULL
+    // 2) Upsert link user↔app
     let link = await this.userAppsRepo.findOne({
       where: { user: { id: user.id }, app: { id: app.id } },
       relations: ['user', 'app'],
     });
 
     if (!link) {
-      link = this.userAppsRepo.create({
+      const createdLink: UserApp = this.userAppsRepo.create({
         user,
         app,
         launchCount: 1,
-      });
-      link = await this.userAppsRepo.save(link);
+        firstSeenAt: now,
+        lastSeenAt: now,
+      } as Partial<UserApp>);
+
+      link = await this.userAppsRepo.save(createdLink);
     } else {
-      link.launchCount += 1;
+      link.launchCount = (link.launchCount ?? 0) + 1;
+      link.lastSeenAt = now;
+      if (!link.firstSeenAt) link.firstSeenAt = now;
+
       link = await this.userAppsRepo.save(link);
     }
 
     return {
       ok: true,
-      app: { code: app.code, name: app.name, latestVersion: app.latestVersion, status: app.status },
-      usage: { firstSeenAt: link.firstSeenAt, lastSeenAt: link.lastSeenAt, launchCount: link.launchCount },
+      app: {
+        code: app.code,
+        name: app.name,
+        latestVersion: app.latestVersion,
+        status: app.status,
+      },
+      usage: {
+        firstSeenAt: link.firstSeenAt ?? null,
+        lastSeenAt: link.lastSeenAt ?? null,
+        launchCount: link.launchCount ?? 0,
+      },
     };
   }
 
@@ -80,16 +105,19 @@ export class AppsService {
   async ownerListApps() {
     const apps = await this.appsRepo.find({ order: { createdAt: 'DESC' } });
 
-    // For each app: count users + lastSeen max
     const rows = await Promise.all(
       apps.map(async (a) => {
-        const { userCount, lastSeenAt, totalLaunches } = await this.userAppsRepo
+        const raw = await this.userAppsRepo
           .createQueryBuilder('ua')
           .select('COUNT(DISTINCT ua.userId)', 'userCount')
           .addSelect('MAX(ua.lastSeenAt)', 'lastSeenAt')
           .addSelect('SUM(ua.launchCount)', 'totalLaunches')
           .where('ua.appId = :appId', { appId: a.id })
-          .getRawOne();
+          .getRawOne<{
+            userCount: string | null;
+            lastSeenAt: string | null;
+            totalLaunches: string | null;
+          }>();
 
         return {
           code: a.code,
@@ -97,9 +125,9 @@ export class AppsService {
           status: a.status,
           latestVersion: a.latestVersion,
           createdAt: a.createdAt,
-          userCount: Number(userCount ?? 0),
-          totalLaunches: Number(totalLaunches ?? 0),
-          lastSeenAt: lastSeenAt ?? null,
+          userCount: Number(raw?.userCount ?? 0),
+          totalLaunches: Number(raw?.totalLaunches ?? 0),
+          lastSeenAt: raw?.lastSeenAt ?? null,
         };
       }),
     );
@@ -110,6 +138,7 @@ export class AppsService {
   // OWNER: list users of an app
   async ownerAppUsers(appCode: string) {
     const code = this.normalizeCode(appCode);
+
     const app = await this.appsRepo.findOne({ where: { code } });
     if (!app) throw new BadRequestException('App inconnue');
 
@@ -120,14 +149,19 @@ export class AppsService {
       take: 200,
     });
 
-    return links.map((l) => ({
-      userId: l.user.id,
-      email: l.user.email,
-      name: l.user.name,
-      role: l.user.role,
-      firstSeenAt: l.firstSeenAt,
-      lastSeenAt: l.lastSeenAt,
-      launchCount: l.launchCount,
-    }));
+    return {
+      code: app.code,
+      name: app.name,
+      userCount: links.length,
+      users: links.map((l) => ({
+        userId: l.user.id,
+        email: l.user.email,
+        name: l.user.name,
+        role: l.user.role,
+        firstSeenAt: l.firstSeenAt ?? null,
+        lastSeenAt: l.lastSeenAt ?? null,
+        launchCount: l.launchCount ?? 0,
+      })),
+    };
   }
 }
